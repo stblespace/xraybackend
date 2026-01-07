@@ -1,10 +1,14 @@
+import asyncio
 from typing import Optional
 
 import grpc
 from google.protobuf import any_pb2, descriptor_pb2, descriptor_pool, symbol_database
 
+from app.config import LOCALHOST_VALUES
 
-INBOUND_TAG = "vless-reality"
+
+HANDLER_SERVICE = "xray.app.proxyman.command.HandlerService"
+ACCOUNT_TYPE_URL = "type.googleapis.com/xray.proxy.vless.Account"
 
 
 class XrayClientError(Exception):
@@ -155,12 +159,17 @@ class XrayClient:
         self,
         host: str,
         port: int,
-        account_type_url: str,
-        handler_service: str,
+        inbound_tag: str,
+        account_type_url: str = ACCOUNT_TYPE_URL,
+        handler_service: str = HANDLER_SERVICE,
         flow: str = "",
         encryption: str = "none",
     ) -> None:
+        if host not in LOCALHOST_VALUES:
+            raise XrayClientError("Xray gRPC must be accessed via localhost")
+
         self.target = f"{host}:{port}"
+        self.inbound_tag = inbound_tag
         self.account_type_url = account_type_url
         self.handler_service = handler_service
         self.flow = flow or ""
@@ -214,9 +223,15 @@ class XrayClient:
             response_deserializer=self.RemoveUserResponse.FromString,
         )
 
+        await self._ensure_channel_ready()
+
+    async def _ensure_channel_ready(self) -> None:
+        if self._channel is None:
+            raise XrayClientError("Xray gRPC channel not initialized")
         try:
-            # Fail fast if Xray is unreachable.
-            await self._channel.channel_ready()
+            await asyncio.wait_for(self._channel.channel_ready(), timeout=2)
+        except asyncio.TimeoutError as exc:
+            raise XrayClientError("Timed out connecting to Xray gRPC") from exc
         except grpc.RpcError as exc:
             raise XrayClientError(exc.details() or str(exc)) from exc
 
@@ -254,6 +269,8 @@ class XrayClient:
 
         if self._channel is None:
             await self.start()
+        else:
+            await self._ensure_channel_ready()
 
         user = self.User()
         user.email = uuid
@@ -262,7 +279,7 @@ class XrayClient:
         user.account.CopyFrom(self._build_account_any(uuid))
 
         request = self.AddUserRequest()
-        request.tag = INBOUND_TAG
+        request.tag = self.inbound_tag
         request.user.CopyFrom(user)
 
         try:
@@ -282,9 +299,11 @@ class XrayClient:
 
         if self._channel is None:
             await self.start()
+        else:
+            await self._ensure_channel_ready()
 
         request = self.RemoveUserRequest()
-        request.tag = INBOUND_TAG
+        request.tag = self.inbound_tag
         request.email = uuid
 
         try:
@@ -296,3 +315,12 @@ class XrayClient:
                 return False
 
             raise XrayClientError(exc.details() or str(exc)) from exc
+
+    async def check_health(self) -> bool:
+        try:
+            if self._channel is None:
+                await self.start()
+            await self._ensure_channel_ready()
+            return True
+        except XrayClientError:
+            return False
