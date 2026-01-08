@@ -1,0 +1,62 @@
+{
+  "log": {
+    "loglevel": "info"
+  },
+  "api": {
+    "tag": "api",
+    "services": ["HandlerService"]
+  },
+  "inbounds": [
+    {
+      "tag": "vless-reality",
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "decryption": "none",
+        "clients": []
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "dest": "www.cloudflare.com:443",
+          "serverNames": ["www.cloudflare.com"],
+          "privateKey": "iPY2TyW67KhQOmX5E9uETHUrZYYUkGTLMrkd77KRGkI",
+          "shortIds": ["abcd"]
+        }
+      }
+    },
+    {
+      "tag": "api",
+      "listen": "127.0.0.1",
+      "port": 10085,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "tag": "direct"
+    },
+    {
+      "protocol": "blackhole",
+      "tag": "block"
+    },
+    {
+      "protocol": "api",
+      "tag": "api"
+    }
+  ],
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "inboundTag": ["api"],
+        "outboundTag": "api"
+      }
+    ]
+  }
+}
