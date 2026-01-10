@@ -8,7 +8,7 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: unless-stopped
     depends_on:
-      - xray
+      - x-ui
     healthcheck:
       test:
         [
@@ -18,12 +18,14 @@ services:
       interval: 30s
       timeout: 3s
       retries: 3
-  xray:
-    image: teddysun/xray:latest
+  x-ui:
+    image: ghcr.io/mhsanaei/3x-ui:latest
     volumes:
-      - ./xray/config.json:/etc/xray/config.json:ro
-    ports:
-      - "443:443"
-      - "127.0.0.1:10085:10085"
-    command: ["xray", "-config", "/etc/xray/config.json"]
+      - ./3x-ui/db:/etc/x-ui
+      - ./3x-ui/cert:/root/cert
+    environment:
+      XRAY_VMESS_AEAD_FORCED: "false"
+      XUI_ENABLE_FAIL2BAN: "true"
+    tty: true
+    network_mode: host
     restart: unless-stopped
