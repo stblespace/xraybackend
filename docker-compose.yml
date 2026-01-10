@@ -17,9 +17,7 @@ services:
       timeout: 3s
       retries: 3
   x-ui:
-    build:
-      context: ./3x-ui
-      dockerfile: ./Dockerfile
+    image: ghcr.io/mhsanaei/3x-ui:latest
     volumes:
       - ./3x-ui/db:/etc/x-ui
       - ./3x-ui/cert:/root/cert
